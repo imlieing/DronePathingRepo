@@ -15,10 +15,10 @@ def handle_output_path(req):
 	msg.angular_rates.z = 0.05
 	return OutputPathsResponse(msg)
 def output_path_server():
-        rospy.init_node('output_path_server')
-        s = rospy.Service('output_path', OutputPath, handle_output_path)
-        print ("Ready to output path.")
-        rospy.spin()
+    rospy.init_node('output_path_server')
+    s = rospy.Service('output_path', OutputPath, handle_output_path)
+    print ("Ready to output path.")
+    rospy.spin()
 
 if __name__ == "__main__":
 	output_path_server()

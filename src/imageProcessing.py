@@ -1,39 +1,42 @@
 #!/usr/bin/env python
-
+import cv2
+import numpy as np
 # Import required Python code.
 import roslib
 import rospy
 import sys
 from rospy import Time
 
+import message_filters
 from mav_msgs.msg import RateThrust
 from sensor_msgs.msg import Image
 from autonomous_control.msg import *
-from pathplanning.srv import *
+from flightgoggles.msg import IRMarkerArray
 
 class image_processing():
     # Must have __init__(self) function for a class, similar to a C++ class constructor.
     def __init__(self):
         self.idleThrust = float(9.81)
-        self.pub_vel = rospy.Publisher('processing/rateThrust', RateThrust, queue_size=2)
-        self.input_picture = rospy.Subscriber("/bounding_box_camera/RGB", Image, OutputPath)
 
-    def control(self):
+        self.input_picture = message_filters.Subscriber("/bounding_box_camera/RGB", Image)
+        self.ir_marker = message_filters.Subscriber("/uav/camera/left/ir_beacons", IRMarkerArray)
+
+        self.pub_vel = rospy.Publisher('processing/rateThrust', RateThrust, queue_size=2)
+
+        ts = message_filters.ApproximateTimeSynchronizer([self.input_picture, self.ir_marker],10, 0.1,allow_headerless=True)
+        ts.registerCallback(self.callback)
+
+    def callback(self,image,ir_marker):
+
         msg = RateThrust()
         msg.header.frame_id = "uav/imu"
-
-        #output_path = rospy.ServiceProxy('output_path', OutputPath)
-        #output_path(self.input_picture)
-
         msg.header.stamp = Time.now()
-
         msg.thrust.z = self.idleThrust + 1;
         msg.angular_rates.x = 0.05
         msg.angular_rates.y = 0.05
         msg.angular_rates.z = 0.05
-
+        #print("FUCK")
         self.pub_vel.publish(msg)
-
 
 if __name__ == '__main__':
     rospy.init_node('image_processing')
@@ -41,6 +44,7 @@ if __name__ == '__main__':
         image_processing_node = image_processing()
         rate = rospy.Rate(20)
         while not rospy.is_shutdown():
-            image_processing_node.control()
+            #image_processing_node.callback(image_processing_node.input_picture, image_processing_node.ir_marker)
+
             rate.sleep()
     except rospy.ROSInterruptException: pass
