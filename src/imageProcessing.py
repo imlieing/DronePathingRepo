@@ -16,7 +16,7 @@ from flightgoggles.msg import IRMarkerArray
 class image_processing():
     # Must have __init__(self) function for a class, similar to a C++ class constructor.
     def __init__(self):
-        self.idleThrust = float(9.81)
+        self.idle_thrust = float(9.81)
 
         self.input_picture = message_filters.Subscriber("/bounding_box_camera/RGB", Image)
         self.ir_marker = message_filters.Subscriber("/uav/camera/left/ir_beacons", IRMarkerArray)
@@ -31,7 +31,7 @@ class image_processing():
         msg = RateThrust()
         msg.header.frame_id = "uav/imu"
         msg.header.stamp = Time.now()
-        msg.thrust.z = self.idleThrust + 1;
+        msg.thrust.z = self.idle_thrust + 1;
         msg.angular_rates.x = 0.05
         msg.angular_rates.y = 0.05
         msg.angular_rates.z = 0.05
