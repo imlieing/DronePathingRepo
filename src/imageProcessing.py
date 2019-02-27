@@ -13,12 +13,15 @@ from sensor_msgs.msg import Image
 from autonomous_control.msg import *
 from flightgoggles.msg import IRMarkerArray
 
+init_pose = rospy.get_param("/uav/flightgoggles_uav_dynamics/init_pose")
+#gate_list = rospy.get_param("/uav/gate_names")
+
 class image_processing():
     # Must have __init__(self) function for a class, similar to a C++ class constructor.
     def __init__(self):
         self.idle_thrust = float(9.81)
 
-        self.input_picture = message_filters.Subscriber("/bounding_box_camera/RGB", Image)
+        self.input_picture = message_filters.Subscriber("/uav/camera/left/image_rect_color", Image)
         self.ir_marker = message_filters.Subscriber("/uav/camera/left/ir_beacons", IRMarkerArray)
 
         self.pub_vel = rospy.Publisher('processing/rateThrust', RateThrust, queue_size=2)
@@ -31,10 +34,10 @@ class image_processing():
         msg = RateThrust()
         msg.header.frame_id = "uav/imu"
         msg.header.stamp = Time.now()
-        msg.thrust.z = self.idle_thrust + 1;
-        msg.angular_rates.x = 0.05
-        msg.angular_rates.y = 0.05
-        msg.angular_rates.z = 0.05
+        msg.thrust.z = 0
+        msg.angular_rates.x = 0
+        msg.angular_rates.y = 0
+        msg.angular_rates.z = 0
         #print("FUCK")
         self.pub_vel.publish(msg)
 
