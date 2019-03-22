@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 import cv2
-import numpy as np
+from numpy import *
 import math
 from transforms3d.quaternions import qmult, qinverse, quat2mat
 import minieigen
+from collections import defaultdict
 # Import required Python code.
+
 import roslib
 import rospy
 import sys
@@ -37,17 +39,17 @@ def gate_centroid_calculator(gate_list):
     return gate_centroid_coordinates
 def IR_marker_cluster_seperator(list_of_IR_markers):
     identified_gates=defaultdict(list)
-    for i in range(len(list_of_IR_markers)):
-        if list_of_IR_markers[i].landmarkID in identified_gates:
-            identified_gates[list_of_IR_markers[i].landmarkID].append(list_of_IR_markers[i])
+    for i in range(len(list_of_IR_markers.markers)):
+        if list_of_IR_markers.markers[i].landmarkID in identified_gates:
+            identified_gates[list_of_IR_markers.markers[i].landmarkID].append(list_of_IR_markers.markers[i])
         else:
-            identified_gates[list_of_IR_markers[i].landmarkID] = list_of_IR_markers[i]
+            identified_gates[list_of_IR_markers.markers[i].landmarkID] = list_of_IR_markers.markers[i]
     return identified_gates
 ##To be used on sub lists IR markers from IR_marker_cluster_seperator.
 def IR_marker_centroid_calculator(sublist_of_IR_markers):
     total_ir_marker_x = 0
     total_ir_marker_y = 0
-    for i range(len(sublist_of_IR_markers)):
+    for i in range(len(sublist_of_IR_markers)):
         total_ir_marker_x += sublist_of_IR_markers[i].x
         total_ir_marker_y += sublist_of_IR_markers[i].y
     total_ir_marker_x = total_ir_marker_x / len(sublist_of_IR_markers)
@@ -76,6 +78,17 @@ def q2q_to_rot(q1,q2):
     rotation_quaternion = qmult(q2,q1inverted)
     rotation_matrix = quat2mat(rotation_quaternion)
     return rotation_matrix
+def ishomog(tr):
+    """
+    True if C{tr} is a 4x4 homogeneous transform.
+    
+    @note: Only the dimensions are tested, not whether the rotation submatrix
+    is orthonormal.
+    
+    @rtype: boolean
+    """
+    
+    return tr.shape == (4,4)
 def tr2rpy(m):
     """
     Extract RPY angles.
@@ -116,8 +129,11 @@ def tr2rpy(m):
 def reorient_to_centroid(init_vector, current_position, current_orientation, target_centroid):
     # find target vector (from current position to gate)
     #current_position = current_pose[:3]
-    target_vec3 = target_centroid - current_position
-    target_vec3 /= np.linalg.norm(target_vec3)
+    target_vec3 = [None]*3
+    for i in range(0,3):
+        target_vec3[i] = target_centroid[i] - current_position[i]
+
+    target_vec3 /= linalg.norm(target_vec3)
     x,y,z = target_vec3.tolist()
     target_vec3 = minieigen.Vector3(x,y,z)
 
@@ -136,20 +152,22 @@ def reorient_to_centroid(init_vector, current_position, current_orientation, tar
     q.normalize()
     return [q[3],q[0],q[1],q[2]]
 
-states=['rotating_to_gate','rotating_to_IR_centroid','flying']
-image_center_x: 1024/2
-image_center_y: 768/2
+states=['rotating_to_gate','rotating_to_IR_centroid','flying','hover']
+image_center_x = 1024/2
+image_center_y = 768/2
 gates = rospy.get_param("/uav/gate_names")
 class image_processing():
     # Must have __init__(self) function for a class, similar to a C++ class constructor.
     def __init__(self):
         init_pose = rospy.get_param("/uav/flightgoggles_uav_dynamics/init_pose")
         ##To be fixed once we know the structure of the pose message
-        init_position = [init_pose.x, init_pose.y, init_pose.z]
-        init_orientation = [init_pose.w,init_pose.i,init_pose.j,init_pose.k]
+        init_position = init_pose[:3]
+        init_orientation = init_pose[3:]
 
-        self.gate_list = init_position + gate_centroid_calculator(gates)
-        self.idle_thrust = float(9.81)
+	self.gate_list = [init_position]
+        self.gate_list = self.gate_list + gate_centroid_calculator(gates)
+        print(self.gate_list)
+	self.idle_thrust = float(9.81)
         #### these parameters all change upon going through a gate
         self.target_gate = 1
         self.current_state = states[0]
@@ -158,8 +176,11 @@ class image_processing():
         self.target_quaternion = ''
         ####
         self.position1 = [0,0,0]
-        self.init_vector = self.current_coords - self.position1
-        self.init_vector /= np.linalg.norm(init_vector)
+        self.init_vector = [None]*len(self.current_coords)
+        for i in range(len(self.current_coords)):
+            self.init_vector[i] = self.current_coords[i] - self.position1[i]
+            print(self.init_vector)
+	self.init_vector /= linalg.norm(self.init_vector)
 
         self.input_picture = message_filters.Subscriber("/uav/camera/left/image_rect_color", Image)
         self.ir_marker = message_filters.Subscriber("/uav/camera/left/ir_beacons", IRMarkerArray)
@@ -177,16 +198,18 @@ class image_processing():
         self.position1 = self.current_coords
         self.current_coords = self.gate_list[(self.target_gate - 1)]
 
-        self.init_vector = self.current_coords - self.position1
-        self.init_vector /= np.linalg.norm(init_vector)
-
-        self.current_orientation = self.target_quaternion
+        for i in range(len(self.current_coords)):
+            self.init_vector[i] = self.current_coords[i] - self.position1[i]
+            print(self.init_vector)
+	self.init_vector /= linalg.norm(self.init_vector)
+        
+	self.current_orientation = self.target_quaternion
         self.target_quaternion = ''
 
 
     def callback(self,image,ir_marker):
         if self.current_state == 'rotating_to_gate':
-            self.target_quaternion = reorient_to_centroid(self.current_orientation,self.gate_list[self.target_gate])
+            self.target_quaternion = reorient_to_centroid(self.init_vector,self.current_coords,self.current_orientation,self.gate_list[self.target_gate])
             next_gate_rotmat = q2q_to_rot(self.current_orientation,self.target_quaternion)
             roll_pitch_yaw = tr2rpy(next_gate_rotmat)
 
@@ -200,15 +223,15 @@ class image_processing():
             msg.header.frame_id = "uav/imu"
             msg.header.stamp = Time.now()
             msg.thrust.z = self.idle_thrust + 1
-            msg.angular_rates.x = roll_pitch_yaw[0,0]/time_to_rotate
-            msg.angular_rates.y = roll_pitch_yaw[0,1]/time_to_rotate
-            msg.angular_rates.z = roll_pitch_yaw[0,2]/time_to_rotate
+            msg.angular_rates.x = 5 #roll_pitch_yaw[0,0]/time_to_rotate
+            msg.angular_rates.y = 5 #roll_pitch_yaw[0,1]/time_to_rotate
+            msg.angular_rates.z = 5 #roll_pitch_yaw[0,2]/time_to_rotate
 
             while rospy.get_rostime() < end_time:
                 self.pub_vel.publish(msg)
             self.current_state = states[1]
 
-        elif self.current_state == 'rotating_to_IR_centroid'
+        elif self.current_state == 'rotating_to_IR_centroid':
             # minimum_distance = 99999
             # closest_gate=''
             #
@@ -237,7 +260,7 @@ class image_processing():
             if ((abs(delta_x) < 50) and (abs(delta_y)) < 50):
                 self.current_state = states[2]
 
-        elif self.current_state == 'flying
+        elif self.current_state == 'flying':
             gate_dictionary = IR_marker_cluster_seperator(ir_marker)
             target_gate_list = gate_dictionary[self.gate_list[self.target_gate]]
             if len(target_gate_list) is 0:
@@ -264,6 +287,15 @@ class image_processing():
                 msg.angular_rates.y = delta_x / 15
                 msg.angular_rates.z = delta_y / 15
                 self.pub_vel.publish(msg)
+        elif self.current_state == 'hover':
+            msg = RateThrust()
+            msg.header.frame_id = "uav/imu"
+            msg.header.stamp = Time.now()
+            msg.thrust.z = self.idle_thrust + 1
+            msg.angular_rates.x = 0
+            msg.angular_rates.y = 0
+            msg.angular_rates.z = 0
+
 if __name__ == '__main__':
     rospy.init_node('image_processing')
     try:
