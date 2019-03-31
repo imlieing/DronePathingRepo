@@ -15,7 +15,6 @@ from rospy import Time
 import message_filters
 from mav_msgs.msg import RateThrust
 from sensor_msgs.msg import Image
-from autonomous_control.msg import *
 from flightgoggles.msg import IRMarkerArray
 
 def gate_centroid_calculator(gate_list):
@@ -81,13 +80,13 @@ def q2q_to_rot(q1,q2):
 def ishomog(tr):
     """
     True if C{tr} is a 4x4 homogeneous transform.
-    
+
     @note: Only the dimensions are tested, not whether the rotation submatrix
     is orthonormal.
-    
+
     @rtype: boolean
     """
-    
+
     return tr.shape == (4,4)
 def tr2rpy(m):
     """
@@ -122,7 +121,7 @@ def tr2rpy(m):
                 return rpy
 
     except ValueError:
-        rpy = []        
+        rpy = []
         for i in range(0,len(m)):
             rpy.append(tr2rpy(m[i]))
         return rpy
@@ -202,7 +201,7 @@ class image_processing():
             self.init_vector[i] = self.current_coords[i] - self.position1[i]
             print(self.init_vector)
 	self.init_vector /= linalg.norm(self.init_vector)
-        
+
 	self.current_orientation = self.target_quaternion
         self.target_quaternion = ''
 
